@@ -1,0 +1,14 @@
+artifact_uri: file:c:/Users/ACER/Downloads/ML Test 4/notebooks/../mlruns/411263346825093685/94d9e5e656bd4a7d9b86dae444268408/artifacts
+end_time: 1775282172734
+entry_point_name: ''
+experiment_id: '411263346825093685'
+lifecycle_stage: active
+run_id: 94d9e5e656bd4a7d9b86dae444268408
+run_name: baseline_sgd_regression
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1775282172581
+status: 3
+tags: []
+user_id: DILSARA

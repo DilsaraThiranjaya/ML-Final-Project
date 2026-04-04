@@ -1,0 +1,14 @@
+artifact_uri: file:c:/Users/ACER/Downloads/ML Test 4/notebooks/../mlruns/295238899290496221/920548a117ec49c29d662956d5513f08/artifacts
+end_time: 1775282176296
+entry_point_name: ''
+experiment_id: '295238899290496221'
+lifecycle_stage: active
+run_id: 920548a117ec49c29d662956d5513f08
+run_name: champion_vertex_deployment_model
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1775282175387
+status: 3
+tags: []
+user_id: DILSARA

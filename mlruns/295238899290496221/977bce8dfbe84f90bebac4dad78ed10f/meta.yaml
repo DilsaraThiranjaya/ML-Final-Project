@@ -1,0 +1,14 @@
+artifact_uri: file:c:/Users/ACER/Downloads/ML Test 4/notebooks/../mlruns/295238899290496221/977bce8dfbe84f90bebac4dad78ed10f/artifacts
+end_time: 1775281768581
+entry_point_name: ''
+experiment_id: '295238899290496221'
+lifecycle_stage: active
+run_id: 977bce8dfbe84f90bebac4dad78ed10f
+run_name: delivery_status_softmax
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1775281757956
+status: 3
+tags: []
+user_id: DILSARA

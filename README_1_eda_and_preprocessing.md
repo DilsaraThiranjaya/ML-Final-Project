@@ -1,48 +1,76 @@
-# Phase 1: Exploratory Data Analysis & Preprocessing Pipeline - Technical Documentation
+# Phase 1: Exploratory Data Analysis & Preprocessing Pipeline
 
-This document provides a line-by-line, cell-by-cell architectural breakdown of the logic implemented in the `1_eda_and_preprocessing.ipynb` notebook. It is strictly procedural to fulfill explicit guidelines and is intended for ML architects to understand the data ingestion, manipulation, and Scikit-learn pipeline engineering strategies employed for AuraCart.
+## Overview
+This phase is the bedrock of the AuraCart MLOps lifecycle. Before we can train a model, we must transform raw, messy transactional data into a mathematically robust format that a machine learning algorithm can interpret. This notebook covers everything from initial data auditing to building a production-ready Scikit-Learn preprocessing pipeline.
+
+### Learning Objectives
+- **Data Auditing**: How to programmatically identify missing values, duplicates, and data type inconsistencies.
+- **Manual Feature Engineering**: Extracting hidden signals from timestamps and geographic strings using regular expressions.
+- **Scikit-Learn Pipelines**: Building a reusable `ColumnTransformer` to automate imputation, scaling, and encoding.
+- **Persistence**: Saving preprocessing artifacts to ensure that future "live" data is treated exactly like our training data.
 
 ---
 
-### Cell 1: Environment Initialization & Data Ingestion
-**Code Focus**: Imports and pandas `read_csv`.
-**Reasoning**: 
-- `pandas` and `numpy` form the foundational data structures necessary for tabular operations.
-- `matplotlib.pyplot` and `seaborn` are imported to generate analytical visualizations like distribution densities and correlation heatmaps. 
-- The target dataset is pulled dynamically from the HuggingFace URL avoiding static local file dependencies.
-- `sns.set_theme(style="whitegrid", palette="muted")` is called to ensure that all generated graphs adhere to professional, high-contrast visual standards.
+## Cell-by-Cell Breakdown
 
-### Cell 2: Feature Dropping and Temporal Extraction
-**Code Focus**: Structuring time data and dropping metadata.
-**Reasoning**:
-- ID columns (`order_id`, `customer_id`, `product_id`) and arbitrary text strings like addresses act as noise in deterministic predictive models. They offer zero generalized significance and exponentially expand vector dimension size, thus they are scrubbed via `drop()`.
-- Time-series data is useless if left as continuous string stamps. By utilizing `pd.to_datetime()`, we access `.dt` accessor methods to surgically extract cyclical features: `order_hour` and `order_month`, giving our regression models a structural understanding of seasonality.
-- We produce the critical `shipping_duration_days` numerical metric derived mathematically by subtracting order dates from shipping dates. Missing values are filled with zeroes using `fillna(0)` reflecting non-shipped pending items.
+### Cell 1: Environment Setup & Constants
+**Code Logic:**
+- Imports `pandas` for data manipulation, `seaborn`/`matplotlib` for plotting, and `joblib` for model serialization.
+- Defines `DROP_ID_COLS` and `DROP_TEXT_COLS`.
+**Strategic Rationale:**
+- We identify high-cardinality features (like unique `order_id`) and raw text (like `shipping_address`) early. These columns contain too much unique noise for simple encoders and must be either dropped or processed via feature extraction.
 
-### Cell 3: Continuous Statistical Visualization
-**Code Focus**: `sns.histplot` targeting Price and Quantity.
-**Reasoning**:
-- Continuous inputs often reflect significant real-world skews. Our histograms visualize this right-skewness specifically in the financial `price` variable. We build this plot to definitively prove the necessity of utilizing `StandardScaler` during our pipeline phase, minimizing the disruptive effect of massive financial values updating gradients inappropriately compared to singular quantities like `quantity` or `order_hour`.
+### Cell 2: Data Loading
+**Code Logic:**
+- Fetches the dataset directly from a remote HuggingFace repository using `pd.read_csv()`.
+**Strategic Rationale:**
+- Using a remote URL ensures reproducibility. Anyone running this notebook will always fetch the exact same version of the source data.
 
-### Cell 4: Multicollinearity Detection
-**Code Focus**: `.select_dtypes(include=[np.number])` and `.corr(method='pearson')` overlaid as an `sns.heatmap`.
-**Reasoning**:
-- Models such as Multiple Linear Regression explicitly rely on features maintaining statistical independence. The Pearson correlation matrix checks the mathematical overlap between variables. Based on the output, we visually verify that none of the features break the 0.9 correlation threshold horizontally, mitigating the need for strict dimensionality reduction steps like PCA.
+### Cell 3: Initial Data Audit
+**Code Logic:**
+- Creates a summary table showing data types, missing value counts, and uniqueness.
+**Strategic Rationale:**
+- A "Data Audit" is different from just looking at the data. It helps us decide our strategy: if a column has 0% missing values, we might choose a different imputation strategy than if it had 20%.
 
-### Cell 5: Class Imbalance Diagnostics
-**Code Focus**: `sns.countplot` on Classification objectives.
-**Reasoning**:
-- E-commerce targets inherently lack parity. Visually displaying `delivery_status` and `customer_segment` allows us to diagnose exact majority/minority distribution scales. For example, 'Delivered' orders vastly outweigh 'Returned'. This direct evidence mandates the eventual architectural usage of `imblearn` Synthetic Minority Over-sampling Technique (SMOTE) to penalize frequency bias across algorithm weight calculations during subsequent classification training.
+### Cell 4: Feature Extraction (The "Hidden" Signals)
+**Code Logic:**
+- **Time Deltas**: Calculates `shipping_delay_days` by subtracting `order_date` from `shipping_date`.
+- **Cyclical Features**: Extracts month, day, and hour. Crucially, it creates an `is_weekend_order` flag.
+- **Regex Extraction**: Uses a Regular Expression (`geo_pattern`) to pull `city` and `state` out of long address strings.
+- **Popularity**: Calculates how many times a `product_id` appears to create a frequency-based feature.
+**Strategic Rationale:**
+- Raw timestamps are useless to a model. By converting them into "Days of Delay" or "Weekend Flags," we provide the model with features that likely correlate with customer behavior (e.g., VIPs might order more on weekends).
 
-### Cell 6: Scikit-learn Preprocessing Pipeline Assembly
-**Code Focus**: Instantiating pipelines utilizing `ColumnTransformer`, `OrdinalEncoder`, `OneHotEncoder`, and `StandardScaler`.
-**Reasoning**:
-- We prevent real-world data leakage by bundling all pre-treatment logic inside a scikit-learn architectural pipeline object. Variables are isolated by type:
-  - **Numeric Transformers**: Scaled logically using standard scaling to control variance widths.
-  - **Nominal Transformers**: Flat categories (payment method, channel) encoded via robust one-hot mechanics, avoiding numerical implication of "value".
-  - **Ordinal Transformers**: In strict adherence to project guidelines, the `Customer Segment` feature explicitly utilizes `OrdinalEncoder` explicitly instructed via custom array mapping (`['New', 'Returning', 'VIP']`) establishing an exact hierarchical progression recognized natively by linear models.
+### Cell 6-9: Exploratory Data Analysis (EDA)
+**Code Logic:**
+- Generates KDE plots (distribution), Boxplots (outliers), and a Correlation Heatmap.
+**Strategic Rationale:**
+- We look for **Skewness**: If `price` is heavily skewed, our model might struggle unless we scale it.
+- We look for **Correlation**: If two features are perfectly correlated, we might be providing redundant information.
 
-### Cell 7: Sub-System Serialization to Disk
-**Code Focus**: `joblib.dump` and `.to_csv`.
-**Reasoning**:
-- Reproducibility relies on downstream machine learning pipelines observing the identical data signatures witnessed dynamically during EDA. The raw preprocessing architecture is exported via `joblib` into an isolated `artifacts/` folder, freezing the blueprint. The fully sanitized structural dataframe is concurrently saved locally as a CSV so future notebook clusters load from an identically cleansed temporal state without redundant preprocessing latency.
+### Cell 10-11: Building the Scikit-Learn Pipeline
+**Code Logic:**
+- Defines three distinct groups:
+    1. **Numerical**: `SimpleImputer(median)` -> `StandardScaler()`.
+    2. **Categorical**: `SimpleImputer(most_frequent)` -> `OneHotEncoder()`.
+    3. **Ordinal**: `OrdinalEncoder` for `customer_segment` (VIP > Returning > New).
+**Strategic Rationale:**
+- **Why Impute?** Algorithms like `SGDRegressor` fail if they encounter a `NaN`.
+- **Why Scale?** It ensures that `price` (thousands) doesn't "overpower" `quantity` (small integers) during gradient descent.
+- **Why Ordinal?** It preserves the logical rank in segments which One-Hot encoding would destroy.
+
+### Cell 12-13: Artifact Persistence
+**Code Logic:**
+- Saves the fitted `preprocessor` as a `.joblib` file and the `df_clean` as a `.csv`.
+**Strategic Rationale:**
+- This is the "MLOps" part. We don't just want a cleaned CSV; we want the *logic* used to clean it. By saving the `preprocessor`, we can ensure that when the model is deployed on the cloud (Phase 4), it processes new data using the same means and standard deviations calculated here.
+
+---
+
+## Technical Summary
+| Library | Purpose |
+| :--- | :--- |
+| `pd.to_datetime` | Converts raw strings into navigable Python objects for math. |
+| `ColumnTransformer` | Ensures that different preprocessing rules are applied to the correct columns simultaneously. |
+| `StandardScaler` | Centers data around 0 with a standard deviation of 1. |
+| `joblib` | High-performance serialization for large NumPy-based objects (our pipeline). |

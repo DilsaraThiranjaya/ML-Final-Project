@@ -1,44 +1,67 @@
-# Phase 2: Supervised Predictive Modeling & Experiment Tracking - Technical Documentation
+# Phase 2: Supervised Modeling & Experiment Tracking
 
-This document explains the procedural methodology engineered inside `2_supervised_modeling.ipynb`. It translates complex mathematical choices regarding Gradient Descent, Multinomial Softmax thresholds, and MLflow pipeline bindings into plain logistical business reasoning.
+## Overview
+Phase 2 transforms our processed data into predictive power. We move beyond simple data manipulation into the realm of **Probabilistic Learning**. This notebook demonstrates how to predict both continuous values (Revenue) and discrete categories (Customer Segments) while maintaining a strict audit trail using **MLflow**.
+
+### Learning Objectives
+- **Stochastic Gradient Descent (SGD)**: Understanding how models learn iteratively.
+- **Handling Class Imbalance**: Implementing **SMOTE** to ensure minority classes (like 'Returned' orders) aren't ignored.
+- **Hyperparameter Optimization**: Using **Optuna** to automatically find the best settings for our algorithms.
+- **The Model Registry**: Moving from a local script to a centralized MLOps "Champion" model management system.
 
 ---
 
-### Cell 1 & 2: Environment Registration and MLflow Architecture
-**Code Focus**: Loading libraries, initializing pandas DataFrames, and binding `mlflow.set_tracking_uri()`.
-**Reasoning**:
-- The notebook ingests the sanitized `ecommerce_cleaned.csv` and frozen `base_preprocessor.joblib` created dynamically during Phase 1. 
-- Setting `mlflow.set_tracking_uri("../mlruns")` forces MLflow to write experiment histories directly to local storage for immediate programmatic tracking, fulfilling the explicit guideline requirement for MLOps artifact management early.
+## Cell-by-Cell Breakdown
 
-### Cell 3 & 4: Continuous Revenue Prediction via SGDRegressor
-**Code Focus**: Scikit-Learn `SGDRegressor`, `ImbPipeline`, and `mlflow.start_run()`.
-**Reasoning**:
-- The target vector natively separates `price` for continuous predictive mapping. 
-- We employ `SGDRegressor` explicitly to gain access to learning parameters (`learning_rate`, `max_iter`, `eta0`). 
-- Using `mlflow.start_run()`, we explicitly capture the execution context, utilizing `log_params()` to log static parameters simulating our epochs and batch control schemas. 
-- Loss functions (MSE and MAE) are calculated and logged dynamically (`log_metric()`). The notebook explicitly contrasts the sensitivity of Mean Squared Error to immense mathematical deviations versus the conservative linearity of Mean Absolute Error. 
+### Cell 1-2: Connectivity & Artifact Retrieval
+**Code Logic:**
+- Connects to an SQLite-backed MLflow server.
+- Loads the `ecommerce_cleaned.csv` and the `base_preprocessor.joblib` created in Phase 1.
+**Strategic Rationale:**
+- **Why SQLite for MLflow?** For beginners, using a local database ensures that your experiment history is saved even if you close the notebook.
 
-### Cell 5 & 6: K-Fold Statistical Validation Limit Testing
-**Code Focus**: Scikit-learn `KFold` and `cross_val_score`.
-**Reasoning**:
-- A single train-test split fundamentally masks dataset variance. By partitioning identical parameters iteratively over 5 dynamically disjoint sets of data chunks (`cv=5`), the `cross_val_score` method verifies that our algorithm isn't simply memorizing specific order data. An aggressively tight standard deviation output fundamentally rejects the presence of overfitting (high variance) in our model.
+### Cell 3: Preprocessor Alignment
+**Code Logic:**
+- Defines `get_aligned_preprocessor()`.
+**Strategic Rationale:**
+- This is a vital "Production" trick. If we decide to train a model that doesn't use all the original features, a standard Scikit-Learn pipeline would crash due to a shape mismatch. This logic allows us to "drop" transformers for missing columns dynamically.
 
-### Cell 7 & 8: Multinomial Softmax Delivery Probability (Classification Task I)
-**Code Focus**: `LogisticRegression(multi_class='multinomial')` integrated explicitly with `SMOTE`.
-**Reasoning**:
-- Traditional Logistic Regression maps binary 0/1 splits via sigmoid curves. Multinomial logistic regression forces probabilities to sum to 1.0 against exclusively distinct labels.
-- Recognizing the fundamental risk diagnosed in Phase 1 regarding class imbalances, the framework utilizes `imblearn.pipeline.Pipeline` instead of `sklearn.pipeline`. This permits Synthetic Minority Over-sampling Technique (SMOTE) to synthetically balance class volume vectors solely during the `fit()` operation, preventing class leakage entirely.
-- MLflow logs the Categorical Cross-Entropy (Log-Loss) metric explicitly. Lower loss represents the algorithm asserting high confidence in mathematically sound label estimations. 
+### Cell 4: Revenue Regression (SGD)
+**Code Logic:**
+- Uses `SGDRegressor` to predict the `price` column.
+- Logs MSE (Mean Squared Error) and MAE (Mean Absolute Error) to MLflow.
+**Strategic Rationale:**
+- **Why SGD?** Unlike standard Linear Regression, SGD is highly scalable and allows us to control the "Learning Rate"—the size of the steps the model takes toward the local minimum of error.
 
-### Cell 9 & 10: Multi-class Evaluation, Tradeoffs & Asymmetric Risk Execution
-**Code Focus**: `confusion_matrix`, `classification_report`, Seaborn heatmaps.
-**Reasoning**:
-- Overall systemic accuracy routinely hides minoritarian class failure. The visual confusion matrix dynamically highlights misclassified matrices mapping specific prediction boundaries.
-- The `classification_report` output specifically focuses analytical insight on **Precision, Recall, and F1-score**.
-- **Asymmetric Risk Translation**: A system misidentifying a normal shipment as "Returned" (False Positive) imposes minimal structural damage compared to completely missing warning variables for actual returned shipments (False Negative - Poor Recall). The code implicitly argues mapping lowered probabilistic acceptance thresholds targeting exactly the "Returned" class to minimize fatal logistical blind spots.
+### Cell 6: Classification & SMOTE
+**Code Logic:**
+- Predicts `delivery_status`.
+- Integrates `SMOTE` (Synthetic Minority Over-sampling Technique).
+**Strategic Rationale:**
+- **The Imbalance Problem**: Most orders are "Delivered." Very few are "Returned." If we didn't use SMOTE, the model would simply guess "Delivered" every time and achieve 90% accuracy while failing 100% of the time on the class we actually care about (Returns).
 
-### Cell 11 & 12: Vertex AI Champion Component Export (Classification Task II)
-**Code Focus**: Pipeline locking and `joblib.dump()`.
-**Reasoning**:
-- Addressing the mandate in Phase 4.2 specifically ("deploy final model trained for customer segment"), we create a secondary structural instance of our Softmax/SMOTE framework but substitute `customer_segment` directly as the primary label objective variable.
-- It executes entirely on the global schema (no train/test withholding). The fully fused execution chain (Raw Features -> StandardScaler/OrdinalEncoders -> SMOTE Handling -> Softmax Estimation) commits irreversibly to disk precisely as `model.joblib`. This monolithic asset eliminates operational friction moving toward GCP containerization.
+### Cell 7: Performance Audit
+**Code Logic:**
+- Generates a **Confusion Matrix**.
+- Performs **Threshold Calibration**.
+**Strategic Rationale:**
+- We don't just care about "Accuracy." We care about **Recall**. Threshold Calibration allows a business manager to decide: "I'd rather have a few false alarms for returns (Low Precision) than miss a single return (High Recall)."
+
+### Cell 8: The Champion Pipeline (Optuna + MLflow)
+**Code Logic:**
+- **Optuna Objective**: Iteratively tests different values for `C` (Regularization) and `solver`.
+- **Nested Runs**: Every trial is saved under the main Optuna run in MLflow.
+- **Registry Promotion**: The best model is labeled "CHAMPION" in the MLflow Model Registry.
+**Strategic Rationale:**
+- **Why Optuna?** Manual tuning is slow and prone to human error. Optuna uses Bayesian optimization to find the "needle in the haystack" of hyperparameters.
+- **Why provide a Unified Joblib?** The final `model.joblib` contains BOTH the preprocessor and the classifier. A developer only needs to load **one** file to get the system running in a web app.
+
+---
+
+## Key Terms for Beginners
+| Term | Meaning |
+| :--- | :--- |
+| **Log Loss** | A metric that punishes the model more heavily if it is confidently wrong than if it is hesitantly wrong. |
+| **Hyperparameters** | The "knobs" on the algorithm (like learning rate) that we set BEFORE training starts. |
+| **SMOTE** | Creates "fake" data points for minority classes to balance the training process. |
+| **Experiment Tracking** | The practice of saving every result so you can compare today's model with one you built last week. |

@@ -1,0 +1,7 @@
+/notebooks/ml-final-project-492403-00f3e88c2f42.json
+/notebooks/mlflow.db
+/notebooks/mlruns/*
+
+/artifacts/base_preprocessor.joblib
+/artifacts/ecommerce_cleaned.csv
+/artifacts/model.joblib
